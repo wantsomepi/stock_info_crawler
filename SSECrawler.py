@@ -85,7 +85,7 @@ def crawl_sse_inquiry_letters(start_page=1, end_page=1, is_download_letters=Fals
 
 if __name__ == '__main__':
     t_0=time.time()
-    crawl_sse_inquiry_letters(start_page=1,end_page=1,is_download_letters=False, print_log=True)
+    df=crawl_sse_inquiry_letters(start_page=1,end_page=1,is_download_letters=False, print_log=True)
     t_1=time.time()
     print('finish, cost {:.3f} seconds'.format(t_1-t_0))
     # Start crawling page 1
