@@ -2,28 +2,15 @@ import time
 import requests
 import json
 from random import random
-import pandas as pd
 import os.path
-
-def _convert_jsonobject_to_dataframe(json_data, columns_match_dict):
-    '''
-        columns_match_dict: i.e. for SSE inquiry letters, 
-        {'Ticker':'stockcode','Company_name':'extGSJC','Date':'cmsOpDate',\
-        'Inquiry_type':'extWTFL','Title':'docTitle','Doc_url':'docURL'}
-    '''
-    columns=columns_match_dict.keys()
-    df=pd.DataFrame(columns=columns,index=[0])
-    for k,v in columns_match_dict.items():
-        df.loc[0,k]=json_data[v]
-    return df
-
+from datetime import datetime
 def _download_pdf_by_url(url, filename='./temp.pdf'):
     response = requests.get(url)        
     if not os.path.isfile(filename):
         with open(filename, 'wb') as f:
             f.write(response.content)
 
-def crawl_sse_inquiry_letters(start_page=1, end_page=1, is_download_letters=False, download_directory='./', print_log=False):
+def crawl_sse_inquiry_letters(start_page=1, end_page=1, is_download_letters=False, download_directory='./', print_log=False, file_name='demo.csv'):
     '''
         is_down_load_letters: choose if download all the inquiry letters pdf files
     '''
@@ -43,7 +30,11 @@ def crawl_sse_inquiry_letters(start_page=1, end_page=1, is_download_letters=Fals
     epoch_time=int(time.time())
     jscallback_patern=str(int(random()*10000))
 
-    df_inquiry=None
+    lines=[]
+    line=''
+    for k in columns_match_dict.keys():
+        line+=k+','
+    lines.append(line.rstrip(','))
     for page_num in range(start_page,end_page+1):
         try:
             if print_log:
@@ -52,36 +43,39 @@ def crawl_sse_inquiry_letters(start_page=1, end_page=1, is_download_letters=Fals
             response = requests.get(url=url,headers=headers_inquiry_letters)
             json_object=json.loads(response.text[len(jscallback_patern)+1:len(response.text)-1])
             row_count=len(json_object['pageHelp']['data'])
-            df=pd.DataFrame(columns=columns_match_dict.keys(),index=range(row_count))
             for i in range(row_count):
-                df.iloc[i,:]=_convert_jsonobject_to_dataframe(json_object['pageHelp']['data'][i],columns_match_dict).values                
-
-            if df_inquiry is None:
-                df_inquiry=df
-            else:
-                df_inquiry=pd.concat([df_inquiry,df],sort=False)
+                line=''
+                for k in columns_match_dict.keys():
+                    line+=json_object['pageHelp']['data'][i][columns_match_dict[k]]+','
+                lines.append(line.rstrip(','))
         except Exception as e:
             print(e)
 
-    if df_inquiry is not None:
-        df_inquiry['Date']=pd.to_datetime(df_inquiry['Date'])
-        df_inquiry.reset_index(drop=True, inplace=True)
+    try:
+        with open(file_name,'w') as file:
+            for line in lines:
+                file.write(line)
+                file.write('\n')
+    except Exception as e:
+        print(e)
 
+    if len(lines)>1:
         if is_download_letters:
-            for index, row in df_inquiry.iterrows():
+            for line in lines[1:]:
+                row=line.split(',')
                 try:
-                    url='http://'+row['Doc_url']                    
-                    filename='{}_{}_{}_{}.pdf'.format(row['Date'].strftime("%Y%m%d"),
-                                                      row['Ticker'], 
-                                                      row['Company_name'].replace('*',''),
-                                                      row['Title'])
+                    url='http://'+row[5]                   
+                    filename='{}_{}_{}_{}.pdf'.format(datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S').strftime("%Y%m%d"),
+                                                      row[0], 
+                                                      row[1].replace('*',''),
+                                                      row[4])
                     if print_log:
                         print('Start downloading PDF file: {}'.format(filename))
                     _download_pdf_by_url(url,download_directory+filename)
                 except Exception as e:
                     print(e)
 
-    return df_inquiry
+    return lines
 
 if __name__ == '__main__':
     t_0=time.time()
@@ -90,7 +84,6 @@ if __name__ == '__main__':
     print('finish, cost {:.3f} seconds'.format(t_1-t_0))
     # Start crawling page 1
     # finish, cost 1.160 seconds
-    df.head()
     #     Ticker	Company_name	Date	Inquiry_type	Title	Doc_url
     # 0	600678	四川金顶	2018-08-14 18:40:01	重大资产重组预案审核意见函	关于四川金顶(集团)股份有限公司的重大资产重组购买报告书(草案）信息披露的二次问询函	www.sse.com.cn/disclosure/credibility/supervis...
     # 1	600478	科力远	2018-08-14 17:40:01	问询函	关于湖南科力远新能源股份有限公司的问询函	www.sse.com.cn/disclosure/credibility/supervis...
